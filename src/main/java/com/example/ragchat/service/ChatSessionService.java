@@ -1,0 +1,64 @@
+package com.example.ragchat.service;
+
+import com.example.ragchat.model.ChatSession;
+import com.example.ragchat.model.ChatMessage;
+import com.example.ragchat.repository.ChatSessionRepository;
+import com.example.ragchat.repository.ChatMessageRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+
+import java.util.Date;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class ChatSessionService {
+    private final ChatSessionRepository sessionRepo;
+    private final ChatMessageRepository messageRepo;
+
+    public ChatSession createSession(String userId, String name) {
+        ChatSession session = ChatSession.builder()
+                .userId(userId)
+                .name(name)
+                .favorite(false)
+                .createdAt(new Date())
+                .updatedAt(new Date())
+                .build();
+        return sessionRepo.save(session);
+    }
+
+    public void renameSession(String sessionId, String name) {
+        ChatSession session = sessionRepo.findById(sessionId).orElseThrow();
+        session.setName(name);
+        session.setUpdatedAt(new Date());
+        sessionRepo.save(session);
+    }
+
+    public void markFavorite(String sessionId, boolean favorite) {
+        ChatSession session = sessionRepo.findById(sessionId).orElseThrow();
+        session.setFavorite(favorite);
+        session.setUpdatedAt(new Date());
+        sessionRepo.save(session);
+    }
+
+    public void deleteSession(String sessionId) {
+        messageRepo.deleteBySessionId(sessionId);
+        sessionRepo.deleteById(sessionId);
+    }
+
+    public ChatMessage addMessage(String sessionId, String sender, String content, String context) {
+        ChatMessage msg = ChatMessage.builder()
+                .sessionId(sessionId)
+                .sender(sender)
+                .content(content)
+                .context(context)
+                .timestamp(new Date())
+                .build();
+        return messageRepo.save(msg);
+    }
+
+    public List<ChatMessage> getMessages(String sessionId, int skip, int limit) {
+        return messageRepo.findBySessionIdOrderByTimestampAsc(sessionId, PageRequest.of(skip/limit, limit));
+    }
+}
