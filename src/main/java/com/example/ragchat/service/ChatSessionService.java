@@ -5,6 +5,7 @@ import com.example.ragchat.model.ChatMessage;
 import com.example.ragchat.repository.ChatSessionRepository;
 import com.example.ragchat.repository.ChatMessageRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -13,11 +14,13 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ChatSessionService {
     private final ChatSessionRepository sessionRepo;
     private final ChatMessageRepository messageRepo;
 
     public ChatSession createSession(String userId, String name) {
+        log.info("Service: Creating session for userId={}, name={}", userId, name);
         ChatSession session = ChatSession.builder()
                 .userId(userId)
                 .name(name)
@@ -30,6 +33,7 @@ public class ChatSessionService {
     }
 
     public void renameSession(String sessionId, String name) {
+        log.info("Service: Renaming session {} to '{}'", sessionId, name);
         ChatSession session = sessionRepo.findById(sessionId).orElseThrow();
         session.setName(name);
         session.setUpdatedAt(new Date());
@@ -37,6 +41,7 @@ public class ChatSessionService {
     }
 
     public void markFavorite(String sessionId, boolean favorite) {
+        log.info("Service: Marking session {} as favorite={}", sessionId, favorite);
         ChatSession session = sessionRepo.findById(sessionId).orElseThrow();
         session.setFavorite(favorite);
         session.setUpdatedAt(new Date());
@@ -44,11 +49,13 @@ public class ChatSessionService {
     }
 
     public void deleteSession(String sessionId) {
+        log.info("Service: Deleting session {}", sessionId);
         messageRepo.deleteBySessionId(sessionId);
         sessionRepo.deleteById(sessionId);
     }
 
     public ChatMessage addMessage(String sessionId, String sender, String content, String context) {
+        log.info("Service: Adding message to session {}: sender={}, content={}", sessionId, sender, content);
         ChatMessage msg = ChatMessage.builder()
                 .sessionId(sessionId)
                 .sender(sender)
@@ -60,16 +67,13 @@ public class ChatSessionService {
     }
 
     public List<ChatMessage> getMessages(String sessionId, int skip, int limit) {
+        log.info("Service: Retrieving messages for session {} (skip={}, limit={})", sessionId, skip, limit);
         List<ChatMessage> chatMessagesList = List.of();
         try{
-            System.out.println("beforee" + sessionId);
             chatMessagesList = messageRepo.findBySessionIdOrderByTimestampAsc(sessionId, PageRequest.of(skip / limit, limit));
         }catch (Exception e){
-            System.out.println(e);
-            System.out.println("issue aa gya");
-
+            log.error(e.getMessage());
         }
-        System.out.println("afterr" + chatMessagesList);
         return chatMessagesList;
     }
 }
