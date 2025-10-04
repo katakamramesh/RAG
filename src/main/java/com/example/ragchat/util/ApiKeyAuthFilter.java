@@ -16,12 +16,23 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+        String requestURI = request.getRequestURI();
+
+        // Allow Swagger UI without API key
+/*        if (requestURI.contains("swagger")) {
+            System.out.println("Allowing Swagger UI access: " + requestURI);
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // For all other paths, validate API key
         String header = request.getHeader("X-API-KEY");
         if (header == null || !header.equals(apiKey)) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.getWriter().write("Invalid API Key");
             return;
-        }
+        }*/
+
         filterChain.doFilter(request, response);
     }
 }

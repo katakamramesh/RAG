@@ -25,6 +25,7 @@ public class ChatSessionService {
                 .createdAt(new Date())
                 .updatedAt(new Date())
                 .build();
+        System.out.println("-----------" + userId + "---------" + name);
         return sessionRepo.save(session);
     }
 
@@ -59,6 +60,16 @@ public class ChatSessionService {
     }
 
     public List<ChatMessage> getMessages(String sessionId, int skip, int limit) {
-        return messageRepo.findBySessionIdOrderByTimestampAsc(sessionId, PageRequest.of(skip/limit, limit));
+        List<ChatMessage> chatMessagesList = List.of();
+        try{
+            System.out.println("beforee" + sessionId);
+            chatMessagesList = messageRepo.findBySessionIdOrderByTimestampAsc(sessionId, PageRequest.of(skip / limit, limit));
+        }catch (Exception e){
+            System.out.println(e);
+            System.out.println("issue aa gya");
+
+        }
+        System.out.println("afterr" + chatMessagesList);
+        return chatMessagesList;
     }
 }

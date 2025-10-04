@@ -7,6 +7,7 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
+      TZ: Asia/Dubai
     volumes:
       - mongo_data:/data/db
 
@@ -20,6 +21,7 @@ services:
       ME_CONFIG_MONGODB_ADMINUSERNAME: root
       ME_CONFIG_MONGODB_ADMINPASSWORD: example
       ME_CONFIG_MONGODB_SERVER: mongo
+      TZ: Asia/Dubai
 
   app:
     build: .
@@ -28,6 +30,8 @@ services:
       - "8080:8080"
     depends_on:
       - mongo
+    environment:
+      TZ: Asia/Dubai
 
 volumes:
   mongo_data:

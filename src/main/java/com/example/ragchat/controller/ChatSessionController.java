@@ -5,6 +5,7 @@ import com.example.ragchat.dto.ChatMessageDTO;
 import com.example.ragchat.model.ChatSession;
 import com.example.ragchat.model.ChatMessage;
 import com.example.ragchat.service.ChatSessionService;
+import com.example.ragchat.util.RAGUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
@@ -21,7 +22,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ChatSessionController {
 
-    private final ChatSessionService service;
+    private ChatSessionService service;
+
+    private RAGUtils ragUtils;
 
     @Value("${api.key}")
     private String apiKey;
@@ -31,59 +34,56 @@ public class ChatSessionController {
         System.out.println("Loaded API_KEY: " + apiKey);
     }
 
-    // API Key Auth
-    private void checkApiKey(HttpServletRequest request) {
-        String header = request.getHeader("X-API-KEY");
-        if (header == null || !header.equals(apiKey)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid API Key");
-        }
-    }
-
     // Create session
     @PostMapping("/sessions")
-    public ChatSession createSession(@RequestBody ChatSessionDTO dto, HttpServletRequest req) {
-        checkApiKey(req);
+    public ChatSession createSession(@RequestBody ChatSessionDTO dto,// @RequestHeader HttpServletRequest req,
+                                     @RequestHeader String apiKey) {
+       // ragUtils.checkApiKey(req, apiKey);
         return service.createSession(dto.getUserId(), dto.getName());
     }
 
     // Rename session
     @PatchMapping("/sessions/{id}/rename")
-    public void renameSession(@PathVariable String id, @RequestParam String name, HttpServletRequest req) {
-        checkApiKey(req);
+    public void renameSession(@PathVariable String id, @RequestParam String name, HttpServletRequest req,
+                              @RequestHeader String apiKey) {
+        ragUtils.checkApiKey(req, apiKey);
         service.renameSession(id, name);
     }
 
     // Mark/unmark as favorite
     @PatchMapping("/sessions/{id}/favorite")
-    public void markFavorite(@PathVariable String id, @RequestParam boolean favorite, HttpServletRequest req) {
-        checkApiKey(req);
+    public void markFavorite(@PathVariable String id, @RequestParam boolean favorite, HttpServletRequest req,
+                             @RequestHeader String apiKey) {
+        ragUtils.checkApiKey(req, apiKey);
         service.markFavorite(id, favorite);
     }
 
     // Delete session
     @DeleteMapping("/sessions/{id}")
-    public void deleteSession(@PathVariable String id, HttpServletRequest req) {
-        checkApiKey(req);
+    public void deleteSession(@PathVariable String id, HttpServletRequest req,
+                              @RequestHeader String apiKey) {
+        ragUtils.checkApiKey(req, apiKey);
         service.deleteSession(id);
     }
 
     // Add message
     @PostMapping("/sessions/{id}/messages")
-    public ChatMessage addMessage(@PathVariable String id, @RequestBody ChatMessageDTO dto, HttpServletRequest req) {
-        checkApiKey(req);
+    public ChatMessage addMessage(@PathVariable String id, @RequestBody ChatMessageDTO dto, HttpServletRequest req,
+                                  @RequestHeader String apiKey) {
+        ragUtils.checkApiKey(req, apiKey);
         return service.addMessage(id, dto.getSender(), dto.getContent(), dto.getContext());
     }
 
     // Retrieve messages (pagination)
-    @GetMapping("/sessions/{id}/messages")
+    @GetMapping("/sessions/messages")
     public List<ChatMessage> getMessages(
-            @PathVariable String id,
-            @RequestParam(defaultValue = "0") int skip,
-            @RequestParam(defaultValue = "20") int limit,
-            HttpServletRequest req
+            @RequestParam String id//,
+            //HttpServletRequest req,
+            //@RequestHeader String apiKey
     ) {
-        checkApiKey(req);
-        return service.getMessages(id, skip, limit);
+        //ragUtils.checkApiKey(req, apiKey);
+        System.out.println("inside controller for get api");
+        return service.getMessages(id, 0, 20);
     }
 
     // Health check
