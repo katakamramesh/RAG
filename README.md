@@ -43,7 +43,7 @@ cp .env.example .env
 Edit `.env`:
 ```properties
 MONGODB_URI=mongodb://root:example@mongo:27017/ragchat?authSource=admin
-API_KEY=your-secret-api-key-here
+API_KEYS=your-secret-api-key-here
 RATE_LIMIT=100
 CORS_ALLOWED_ORIGINS=*
 ```
@@ -78,11 +78,11 @@ You should see:
 
 ## Environment Variables
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `MONGODB_URI` | MongoDB connection string | - | Yes |
-| `API_KEY` | API key for authentication | - | Yes |
-| `RATE_LIMIT` | Max requests per minute per IP | 10 | No |
+| Variable               | Description | Default | Required |
+|------------------------|-------------|---------|----------|
+| `MONGODB_URI`          | MongoDB connection string | - | Yes |
+| `API_KEYS`             | API key for authentication | - | Yes |
+| `RATE_LIMIT`           | Max requests per minute per IP | 10 | No |
 | `CORS_ALLOWED_ORIGINS` | Allowed CORS origins (comma-separated) | * | No |
 
 ---
@@ -244,7 +244,7 @@ Ensure MongoDB is running on `localhost:27017`
 ### 2. Set environment variables
 ```bash
 export MONGODB_URI=mongodb://localhost:27017/ragchat
-export API_KEY=my-secret-key
+export API_KEYS=my-secret-key
 export RATE_LIMIT=100
 export CORS_ALLOWED_ORIGINS=*
 ```
@@ -292,7 +292,7 @@ mongodb://root:example@localhost:27017/?authSource=admin
 
 ### API returns "Invalid API Key"
 - Verify `X-API-KEY` header is set correctly
-- Check `.env` file for correct `API_KEY` value
+- Check `.env` file for correct `API_KEYS` value
 - Restart containers: `docker-compose restart`
 
 ### Cannot connect to MongoDB

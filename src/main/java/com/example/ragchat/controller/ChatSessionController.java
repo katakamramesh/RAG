@@ -5,8 +5,10 @@ import com.example.ragchat.dto.ChatSessionDTO;
 import com.example.ragchat.model.ChatMessage;
 import com.example.ragchat.model.ChatSession;
 import com.example.ragchat.service.ChatSessionService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,15 +22,39 @@ public class ChatSessionController {
 
     private final ChatSessionService service;
 
-    // Create session
+    /**
+     * Create a new chat session
+     */
     @PostMapping("/sessions")
-    public ResponseEntity<ChatSession> createSession(@RequestBody ChatSessionDTO dto) {
+    public ResponseEntity<ChatSession> createSession(@Valid @RequestBody ChatSessionDTO dto) {
         log.info("Creating session for userId={}, name={}", dto.getUserId(), dto.getName());
         ChatSession session = service.createSession(dto.getUserId(), dto.getName());
+        return ResponseEntity.status(HttpStatus.CREATED).body(session);
+    }
+
+    /**
+     * Get session by ID
+     */
+    @GetMapping("/sessions/{id}")
+    public ResponseEntity<ChatSession> getSession(@PathVariable String id) {
+        log.info("Retrieving session {}", id);
+        ChatSession session = service.getSessionById(id);
         return ResponseEntity.ok(session);
     }
 
-    // Rename session
+    /**
+     * Get all sessions for a user
+     */
+    @GetMapping("/sessions")
+    public ResponseEntity<List<ChatSession>> getSessionsByUser(@RequestParam String userId) {
+        log.info("Retrieving sessions for user {}", userId);
+        List<ChatSession> sessions = service.getSessionsByUserId(userId);
+        return ResponseEntity.ok(sessions);
+    }
+
+    /**
+     * Rename a session
+     */
     @PatchMapping("/sessions/{id}/rename")
     public ResponseEntity<Void> renameSession(
             @PathVariable String id,
@@ -38,7 +64,9 @@ public class ChatSessionController {
         return ResponseEntity.ok().build();
     }
 
-    // Mark/unmark as favorite
+    /**
+     * Mark or unmark session as favorite
+     */
     @PatchMapping("/sessions/{id}/favorite")
     public ResponseEntity<Void> markFavorite(
             @PathVariable String id,
@@ -48,19 +76,23 @@ public class ChatSessionController {
         return ResponseEntity.ok().build();
     }
 
-    // Delete session
+    /**
+     * Delete a session
+     */
     @DeleteMapping("/sessions/{id}")
     public ResponseEntity<Void> deleteSession(@PathVariable String id) {
         log.info("Deleting session {}", id);
         service.deleteSession(id);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 
-    // Add message
+    /**
+     * Add a message to a session
+     */
     @PostMapping("/sessions/{id}/messages")
     public ResponseEntity<ChatMessage> addMessage(
             @PathVariable String id,
-            @RequestBody ChatMessageDTO dto) {
+            @Valid @RequestBody ChatMessageDTO dto) {
         log.info("Adding message to session {}: from {}, content='{}'", id, dto.getSender(), dto.getContent());
         ChatMessage message = service.addMessage(
                 id,
@@ -68,10 +100,12 @@ public class ChatSessionController {
                 dto.getContent(),
                 dto.getContext()
         );
-        return ResponseEntity.ok(message);
+        return ResponseEntity.status(HttpStatus.CREATED).body(message);
     }
 
-    // Retrieve messages (pagination)
+    /**
+     * Retrieve messages for a session with pagination
+     */
     @GetMapping("/sessions/{id}/messages")
     public ResponseEntity<List<ChatMessage>> getMessages(
             @PathVariable String id,
@@ -82,7 +116,9 @@ public class ChatSessionController {
         return ResponseEntity.ok(messages);
     }
 
-    // Health check
+    /**
+     * Health check endpoint
+     */
     @GetMapping("/health")
     public ResponseEntity<String> health() {
         log.debug("Health check endpoint called");

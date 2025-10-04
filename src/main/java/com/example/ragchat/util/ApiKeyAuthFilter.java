@@ -9,12 +9,14 @@ import jakarta.servlet.http.*;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
-    @Value("${api.key}")
-    private String apiKey;
+    @Value("${api.keys}")
+    private String apiKeys;
 
     // Paths that don't require API key authentication
     private static final List<String> EXCLUDED_PATHS = Arrays.asList(
@@ -47,7 +49,12 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (!providedApiKey.equals(apiKey)) {
+        // Check if provided key is in the list of valid keys
+        Set<String> validKeys = Arrays.stream(apiKeys.split(","))
+                .map(String::trim)
+                .collect(Collectors.toSet());
+
+        if (!validKeys.contains(providedApiKey)) {
             sendUnauthorizedResponse(response, "Invalid API Key");
             return;
         }

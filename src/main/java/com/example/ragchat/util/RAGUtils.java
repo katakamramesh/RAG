@@ -9,7 +9,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 public class RAGUtils {
 
-    @Value("${api.key}")
+    @Value("${api.keys}")
     private String apiKey;
 
     // API Key Auth
