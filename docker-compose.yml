@@ -32,6 +32,8 @@ services:
       - mongo
     environment:
       TZ: Asia/Dubai
+    volumes:
+      - ./logs:/app/logs
 
 volumes:
   mongo_data:
