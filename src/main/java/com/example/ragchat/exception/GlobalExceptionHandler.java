@@ -78,6 +78,26 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle LLM Exception (503)
+     */
+    @ExceptionHandler(LLMException.class)
+    public ResponseEntity<ErrorResponse> handleLLMException(
+            LLMException ex,
+            HttpServletRequest request) {
+        log.error("LLM error: {}", ex.getMessage());
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.SERVICE_UNAVAILABLE.value())
+                .error("Service Unavailable")
+                .message("LLM service error: " + ex.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(errorResponse);
+    }
+
+    /**
      * Handle Validation Errors (400)
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -1,10 +1,12 @@
 package com.example.ragchat.controller;
 
 import com.example.ragchat.dto.ChatMessageDTO;
+import com.example.ragchat.dto.ChatQueryRequest;
 import com.example.ragchat.dto.ChatSessionDTO;
 import com.example.ragchat.model.ChatMessage;
 import com.example.ragchat.model.ChatSession;
 import com.example.ragchat.service.ChatSessionService;
+import com.example.ragchat.service.LLMService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
@@ -21,6 +24,7 @@ import java.util.List;
 public class ChatSessionController {
 
     private final ChatSessionService service;
+    private final LLMService llmService;
 
     /**
      * Create a new chat session
@@ -87,7 +91,7 @@ public class ChatSessionController {
     }
 
     /**
-     * Add a message to a session
+     * Add a message to a session (without LLM)
      */
     @PostMapping("/sessions/{id}/messages")
     public ResponseEntity<ChatMessage> addMessage(
@@ -101,6 +105,106 @@ public class ChatSessionController {
                 dto.getContext()
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(message);
+    }
+
+    /**
+     * Query LLM and save both user query and LLM response
+     */
+    @PostMapping("/sessions/{id}/chat")
+    public ResponseEntity<Map<String, Object>> chat(
+            @PathVariable String id,
+            @Valid @RequestBody ChatQueryRequest request) {
+
+        log.info("Chat query for session {}: '{}'", id, request.getQuery());
+
+        try {
+            // Save user message
+            ChatMessage userMessage = service.addMessage(
+                    id,
+                    "user",
+                    request.getQuery(),
+                    request.getContext()
+            );
+
+            // Get conversation history if requested
+            String llmResponse;
+            if (Boolean.TRUE.equals(request.getIncludeHistory())) {
+                List<ChatMessage> history = service.getMessages(id, 0, 10);
+                List<Map<String, String>> conversationHistory = history.stream()
+                        .map(msg -> {
+                            Map<String, String> m = new HashMap<>();
+                            m.put("role", "assistant".equals(msg.getSender()) ? "assistant" : "user");
+                            m.put("content", msg.getContent());
+                            return m;
+                        })
+                        .collect(Collectors.toList());
+
+                llmResponse = llmService.queryWithHistory(
+                        request.getQuery(),
+                        request.getContext(),
+                        conversationHistory
+                );
+            } else {
+                llmResponse = llmService.query(request.getQuery(), request.getContext());
+            }
+
+            // Save LLM response
+            ChatMessage assistantMessage = service.addMessage(
+                    id,
+                    "assistant",
+                    llmResponse,
+                    null
+            );
+
+            // Prepare response
+            Map<String, Object> response = new HashMap<>();
+            response.put("userMessage", userMessage);
+            response.put("assistantMessage", assistantMessage);
+            response.put("response", llmResponse);
+
+            log.info("Chat completed successfully for session {}", id);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Error processing chat for session {}: {}", id, e.getMessage(), e);
+
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to process chat");
+            errorResponse.put("message", e.getMessage());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(errorResponse);
+        }
+    }
+
+    /**
+     * Simple LLM query without saving to database
+     */
+    @PostMapping("/llm/query")
+    public ResponseEntity<Map<String, String>> queryLLM(
+            @Valid @RequestBody ChatQueryRequest request) {
+
+        log.info("Direct LLM query: '{}'", request.getQuery());
+
+        try {
+            String response = llmService.query(request.getQuery(), request.getContext());
+
+            Map<String, String> result = new HashMap<>();
+            result.put("query", request.getQuery());
+            result.put("response", response);
+
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            log.error("Error querying LLM: {}", e.getMessage(), e);
+
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to query LLM");
+            errorResponse.put("message", e.getMessage());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(errorResponse);
+        }
     }
 
     /**
