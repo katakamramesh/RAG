@@ -32,7 +32,6 @@ public class ChatSessionService {
     public ChatSession createSession(String userId, String name) {
         log.info("Service: Creating session for userId={}, name={}", userId, name);
 
-        // Validate input
         if (userId == null || userId.trim().isEmpty()) {
             throw new InvalidInputException("User ID cannot be empty");
         }
@@ -40,11 +39,8 @@ public class ChatSessionService {
             throw new InvalidInputException("Session name cannot be empty");
         }
 
-        // Create session using ModelMapper
         ChatSessionDTO dto = new ChatSessionDTO(userId, name);
         ChatSession session = modelMapper.map(dto, ChatSession.class);
-
-        // Set additional fields
         session.setFavorite(false);
         session.setCreatedAt(new Date());
         session.setUpdatedAt(new Date());
@@ -55,17 +51,15 @@ public class ChatSessionService {
     /**
      * Rename an existing session
      */
-    public void renameSession(String sessionId, String name) {
+    public void renameSession(Long sessionId, String name) {
         log.info("Service: Renaming session {} to '{}'", sessionId, name);
 
-        // Validate input
         if (name == null || name.trim().isEmpty()) {
             throw new InvalidInputException("Session name cannot be empty");
         }
 
-        // Find session or throw exception
         ChatSession session = sessionRepo.findById(sessionId)
-                .orElseThrow(() -> new SessionNotFoundException(sessionId));
+                .orElseThrow(() -> new SessionNotFoundException(String.valueOf(sessionId)));
 
         session.setName(name);
         session.setUpdatedAt(new Date());
@@ -75,12 +69,11 @@ public class ChatSessionService {
     /**
      * Mark or unmark session as favorite
      */
-    public void markFavorite(String sessionId, boolean favorite) {
+    public void markFavorite(Long sessionId, boolean favorite) {
         log.info("Service: Marking session {} as favorite={}", sessionId, favorite);
 
-        // Find session or throw exception
         ChatSession session = sessionRepo.findById(sessionId)
-                .orElseThrow(() -> new SessionNotFoundException(sessionId));
+                .orElseThrow(() -> new SessionNotFoundException(String.valueOf(sessionId)));
 
         session.setFavorite(favorite);
         session.setUpdatedAt(new Date());
@@ -91,15 +84,13 @@ public class ChatSessionService {
      * Delete a session and all its messages
      */
     @Transactional
-    public void deleteSession(String sessionId) {
+    public void deleteSession(Long sessionId) {
         log.info("Service: Deleting session {}", sessionId);
 
-        // Verify session exists before deleting
         if (!sessionRepo.existsById(sessionId)) {
-            throw new SessionNotFoundException(sessionId);
+            throw new SessionNotFoundException(String.valueOf(sessionId));
         }
 
-        // Delete all messages first, then the session
         messageRepo.deleteBySessionId(sessionId);
         sessionRepo.deleteById(sessionId);
     }
@@ -107,15 +98,12 @@ public class ChatSessionService {
     /**
      * Add a message to a session
      */
-    public ChatMessage addMessage(String sessionId, String sender, String content, String context) {
+    public ChatMessage addMessage(Long sessionId, String sender, String content, String context) {
         log.info("Service: Adding message to session {}: sender={}, content={}", sessionId, sender, content);
 
-        // Validate session exists
         if (!sessionRepo.existsById(sessionId)) {
-            throw new SessionNotFoundException(sessionId);
+            throw new SessionNotFoundException(String.valueOf(sessionId));
         }
-
-        // Validate input
         if (sender == null || sender.trim().isEmpty()) {
             throw new InvalidInputException("Sender cannot be empty");
         }
@@ -123,11 +111,8 @@ public class ChatSessionService {
             throw new InvalidInputException("Message content cannot be empty");
         }
 
-        // Create message using ModelMapper
         ChatMessageDTO dto = new ChatMessageDTO(sender, content, context);
         ChatMessage msg = modelMapper.map(dto, ChatMessage.class);
-
-        // Set additional fields
         msg.setSessionId(sessionId);
         msg.setTimestamp(new Date());
 
@@ -137,43 +122,30 @@ public class ChatSessionService {
     /**
      * Retrieve messages for a session with pagination
      */
-    public List<ChatMessage> getMessages(String sessionId, int skip, int limit) {
+    public List<ChatMessage> getMessages(Long sessionId, int skip, int limit) {
         log.info("Service: Retrieving messages for session {} (skip={}, limit={})", sessionId, skip, limit);
 
-        // Validate session exists
         if (!sessionRepo.existsById(sessionId)) {
-            throw new SessionNotFoundException(sessionId);
+            throw new SessionNotFoundException(String.valueOf(sessionId));
         }
-
-        // Validate pagination parameters
         if (skip < 0) {
             throw new InvalidInputException("Skip value cannot be negative");
         }
-        if (limit <= 0) {
-            throw new InvalidInputException("Limit value must be positive");
-        }
-        if (limit > 100) {
-            throw new InvalidInputException("Limit value cannot exceed 100");
+        if (limit <= 0 || limit > 100) {
+            throw new InvalidInputException("Limit value must be between 1 and 100");
         }
 
-        try {
-            return messageRepo.findBySessionIdOrderByTimestampAsc(
-                    sessionId,
-                    PageRequest.of(skip / limit, limit)
-            );
-        } catch (Exception e) {
-            log.error("Error retrieving messages: {}", e.getMessage());
-            throw new RuntimeException("Failed to retrieve messages", e);
-        }
+        int page = skip / limit;
+        return messageRepo.findBySessionIdOrderByTimestampAsc(sessionId, PageRequest.of(page, limit));
     }
 
     /**
      * Get session by ID
      */
-    public ChatSession getSessionById(String sessionId) {
+    public ChatSession getSessionById(Long sessionId) {
         log.info("Service: Retrieving session {}", sessionId);
         return sessionRepo.findById(sessionId)
-                .orElseThrow(() -> new SessionNotFoundException(sessionId));
+                .orElseThrow(() -> new SessionNotFoundException(String.valueOf(sessionId)));
     }
 
     /**

@@ -1,21 +1,33 @@
 package com.example.ragchat.model;
 
-import lombok.*;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 import java.util.Date;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@Document(collection = "chat_messages")
+@Entity
+@Table(name = "chat_messages")
+@Getter
+@Setter
 public class ChatMessage {
+
     @Id
-    private String id;
-    private String sessionId;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false)
+    private Long sessionId; // foreign key reference to ChatSession.id
+
+    @Column(nullable = false)
     private String sender;
+
+    @Column(nullable = false, length = 1000)
     private String content;
-    private String context; // optional
-    private Date timestamp;
+
+    @Column(length = 1000)
+    private String context;
+
+    @Column(nullable = false)
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date timestamp = new Date();
 }

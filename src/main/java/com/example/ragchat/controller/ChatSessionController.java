@@ -40,7 +40,7 @@ public class ChatSessionController {
      * Get session by ID
      */
     @GetMapping("/sessions/{id}")
-    public ResponseEntity<ChatSession> getSession(@PathVariable String id) {
+    public ResponseEntity<ChatSession> getSession(@PathVariable Long id) {
         log.info("Retrieving session {}", id);
         ChatSession session = service.getSessionById(id);
         return ResponseEntity.ok(session);
@@ -61,7 +61,7 @@ public class ChatSessionController {
      */
     @PatchMapping("/sessions/{id}/rename")
     public ResponseEntity<Void> renameSession(
-            @PathVariable String id,
+            @PathVariable Long id,
             @RequestParam String name) {
         log.info("Renaming session {} to '{}'", id, name);
         service.renameSession(id, name);
@@ -73,7 +73,7 @@ public class ChatSessionController {
      */
     @PatchMapping("/sessions/{id}/favorite")
     public ResponseEntity<Void> markFavorite(
-            @PathVariable String id,
+            @PathVariable Long id,
             @RequestParam boolean favorite) {
         log.info("Marking session {} as favorite={}", id, favorite);
         service.markFavorite(id, favorite);
@@ -84,7 +84,7 @@ public class ChatSessionController {
      * Delete a session
      */
     @DeleteMapping("/sessions/{id}")
-    public ResponseEntity<Void> deleteSession(@PathVariable String id) {
+    public ResponseEntity<Void> deleteSession(@PathVariable Long id) {
         log.info("Deleting session {}", id);
         service.deleteSession(id);
         return ResponseEntity.noContent().build();
@@ -95,7 +95,7 @@ public class ChatSessionController {
      */
     @PostMapping("/sessions/{id}/messages")
     public ResponseEntity<ChatMessage> addMessage(
-            @PathVariable String id,
+            @PathVariable Long id,
             @Valid @RequestBody ChatMessageDTO dto) {
         log.info("Adding message to session {}: from {}, content='{}'", id, dto.getSender(), dto.getContent());
         ChatMessage message = service.addMessage(
@@ -112,7 +112,7 @@ public class ChatSessionController {
      */
     @PostMapping("/sessions/{id}/chat")
     public ResponseEntity<Map<String, Object>> chat(
-            @PathVariable String id,
+            @PathVariable Long id,
             @Valid @RequestBody ChatQueryRequest request) {
 
         log.info("Chat query for session {}: '{}'", id, request.getQuery());
@@ -212,7 +212,7 @@ public class ChatSessionController {
      */
     @GetMapping("/sessions/{id}/messages")
     public ResponseEntity<List<ChatMessage>> getMessages(
-            @PathVariable String id,
+            @PathVariable Long id,
             @RequestParam(defaultValue = "0") int skip,
             @RequestParam(defaultValue = "20") int limit) {
         log.info("Retrieving messages for session {} (skip={}, limit={})", id, skip, limit);
