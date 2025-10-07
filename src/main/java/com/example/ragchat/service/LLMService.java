@@ -1,8 +1,8 @@
 package com.example.ragchat.service;
 
-import com.example.ragchat.dto.LLMRequest;
-import com.example.ragchat.dto.LLMResponse;
 import com.example.ragchat.exception.LLMException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -18,10 +18,10 @@ public class LLMService {
     @Value("${llm.api.key}")
     private String apiKey;
 
-    @Value("${llm.api.url:https://api.openai.com/v1/chat/completions}")
+    @Value("${llm.api.url}")
     private String apiUrl;
 
-    @Value("${llm.model:gpt-3.5-turbo}")
+    @Value("${llm.model}")
     private String model;
 
     @Value("${llm.max.tokens:1000}")
@@ -31,50 +31,36 @@ public class LLMService {
     private double temperature;
 
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     public LLMService() {
         this.restTemplate = new RestTemplate();
+        this.objectMapper = new ObjectMapper();
     }
 
     /**
-     * Send a query to the LLM and get a response
+     * Send a query to LLM and get a response
      */
     public String query(String userMessage, String context) {
         log.info("Sending query to LLM: {}", userMessage);
+        log.debug("API URL: {}", apiUrl);
+
+        // Validate configuration
+        if (apiUrl == null || apiUrl.isEmpty() || !apiUrl.startsWith("http")) {
+            throw new LLMException("Invalid LLM_API_URL configuration. Current value: " + apiUrl);
+        }
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new LLMException("LLM_API_KEY is not configured");
+        }
 
         try {
-            // Build the request
-            LLMRequest request = buildRequest(userMessage, context);
-
-            // Set headers
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
-
-            HttpEntity<LLMRequest> entity = new HttpEntity<>(request, headers);
-
-            // Make API call
-            ResponseEntity<LLMResponse> response = restTemplate.exchange(
-                    apiUrl,
-                    HttpMethod.POST,
-                    entity,
-                    LLMResponse.class
-            );
-
-            // Extract and return the response
-            if (response.getBody() != null && 
-                response.getBody().getChoices() != null && 
-                !response.getBody().getChoices().isEmpty()) {
-                
-                String content = response.getBody().getChoices().get(0)
-                        .getMessage().getContent();
-                
-                log.info("LLM response received successfully");
-                return content;
+            // Detect API type and use appropriate format
+            if (isOpenAICompatible()) {
+                return queryOpenAIFormat(userMessage, context);
+            } else {
+                return queryHuggingFaceFormat(userMessage, context);
             }
-
-            throw new LLMException("Empty response from LLM");
-
         } catch (Exception e) {
             log.error("Error querying LLM: {}", e.getMessage(), e);
             throw new LLMException("Failed to get response from LLM: " + e.getMessage());
@@ -82,25 +68,38 @@ public class LLMService {
     }
 
     /**
-     * Build the LLM request with messages
+     * Check if API uses OpenAI-compatible format (Groq, Together AI, etc.)
      */
-    private LLMRequest buildRequest(String userMessage, String context) {
+    private boolean isOpenAICompatible() {
+        return apiUrl.contains("openai") ||
+                apiUrl.contains("groq.com") ||
+                apiUrl.contains("together.xyz") ||
+                apiUrl.contains("chat/completions");
+    }
+
+    /**
+     * Query using OpenAI-compatible format (Groq, Together AI, etc.)
+     */
+    private String queryOpenAIFormat(String userMessage, String context) {
+        log.info("Using OpenAI-compatible format");
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("model", model);
+
         List<Map<String, String>> messages = new ArrayList<>();
 
-        // System message with instructions
-        Map<String, String> systemMessage = new HashMap<>();
-        systemMessage.put("role", "system");
-        systemMessage.put("content", 
-            "You are a helpful AI assistant. Use the provided context to answer questions accurately. " +
-            "If the context doesn't contain relevant information, say so politely and provide a general answer.");
-        messages.add(systemMessage);
+        // System message
+        Map<String, String> systemMsg = new HashMap<>();
+        systemMsg.put("role", "system");
+        systemMsg.put("content", "You are a helpful AI assistant.");
+        messages.add(systemMsg);
 
-        // Add context if available
+        // Context if available
         if (context != null && !context.trim().isEmpty()) {
-            Map<String, String> contextMessage = new HashMap<>();
-            contextMessage.put("role", "system");
-            contextMessage.put("content", "Context: " + context);
-            messages.add(contextMessage);
+            Map<String, String> contextMsg = new HashMap<>();
+            contextMsg.put("role", "system");
+            contextMsg.put("content", "Context: " + context);
+            messages.add(contextMsg);
         }
 
         // User message
@@ -109,90 +108,241 @@ public class LLMService {
         userMsg.put("content", userMessage);
         messages.add(userMsg);
 
-        LLMRequest request = new LLMRequest();
-        request.setModel(model);
-        request.setMessages(messages);
-        request.setMaxTokens(maxTokens);
-        request.setTemperature(temperature);
+        request.put("messages", messages);
+        request.put("max_tokens", maxTokens);
+        request.put("temperature", temperature);
 
-        return request;
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", "Bearer " + apiKey);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                apiUrl,
+                HttpMethod.POST,
+                entity,
+                String.class
+        );
+
+        return parseOpenAIResponse(response.getBody());
+    }
+
+    /**
+     * Query using Hugging Face format
+     */
+    private String queryHuggingFaceFormat(String userMessage, String context) {
+        log.info("Using Hugging Face format");
+
+        String prompt = buildHuggingFacePrompt(userMessage, context);
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("inputs", prompt);
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("max_new_tokens", maxTokens);
+        parameters.put("temperature", temperature);
+        parameters.put("return_full_text", false);
+        request.put("parameters", parameters);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", "Bearer " + apiKey);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                apiUrl,
+                HttpMethod.POST,
+                entity,
+                String.class
+        );
+
+        return parseHuggingFaceResponse(response.getBody());
+    }
+
+    /**
+     * Build prompt for Hugging Face
+     */
+    private String buildHuggingFacePrompt(String userMessage, String context) {
+        StringBuilder prompt = new StringBuilder();
+
+        if (context != null && !context.trim().isEmpty()) {
+            prompt.append("Context: ").append(context).append("\n\n");
+        }
+
+        prompt.append("Question: ").append(userMessage).append("\n");
+        prompt.append("Answer:");
+
+        return prompt.toString();
+    }
+
+    /**
+     * Parse OpenAI-compatible response
+     */
+    private String parseOpenAIResponse(String responseBody) {
+        try {
+            JsonNode jsonNode = objectMapper.readTree(responseBody);
+
+            if (jsonNode.has("choices") && jsonNode.get("choices").isArray()) {
+                JsonNode choices = jsonNode.get("choices");
+                if (choices.size() > 0) {
+                    JsonNode message = choices.get(0).get("message");
+                    if (message != null && message.has("content")) {
+                        return message.get("content").asText().trim();
+                    }
+                }
+            }
+
+            if (jsonNode.has("error")) {
+                String error = jsonNode.get("error").asText();
+                throw new LLMException("API error: " + error);
+            }
+
+            throw new LLMException("Unexpected response format");
+
+        } catch (Exception e) {
+            log.error("Error parsing response: {}", e.getMessage());
+            throw new LLMException("Failed to parse response: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Parse Hugging Face response
+     */
+    private String parseHuggingFaceResponse(String responseBody) {
+        try {
+            JsonNode jsonNode = objectMapper.readTree(responseBody);
+
+            if (jsonNode.isArray() && jsonNode.size() > 0) {
+                JsonNode firstResult = jsonNode.get(0);
+                if (firstResult.has("generated_text")) {
+                    return firstResult.get("generated_text").asText().trim();
+                }
+            }
+
+            if (jsonNode.has("error")) {
+                String error = jsonNode.get("error").asText();
+                throw new LLMException("Hugging Face API error: " + error);
+            }
+
+            throw new LLMException("Unexpected response format from Hugging Face");
+
+        } catch (Exception e) {
+            log.error("Error parsing Hugging Face response: {}", e.getMessage());
+            throw new LLMException("Failed to parse response: " + e.getMessage());
+        }
     }
 
     /**
      * Query with conversation history
      */
-    public String queryWithHistory(String userMessage, String context, 
+    public String queryWithHistory(String userMessage, String context,
                                    List<Map<String, String>> conversationHistory) {
-        log.info("Sending query to LLM with conversation history");
+        log.info("Sending query with conversation history");
 
         try {
-            LLMRequest request = new LLMRequest();
-            request.setModel(model);
-            request.setMaxTokens(maxTokens);
-            request.setTemperature(temperature);
-
-            List<Map<String, String>> messages = new ArrayList<>();
-
-            // System message
-            Map<String, String> systemMessage = new HashMap<>();
-            systemMessage.put("role", "system");
-            systemMessage.put("content", 
-                "You are a helpful AI assistant. Use the provided context and conversation history " +
-                "to provide relevant and accurate answers.");
-            messages.add(systemMessage);
-
-            // Add context
-            if (context != null && !context.trim().isEmpty()) {
-                Map<String, String> contextMessage = new HashMap<>();
-                contextMessage.put("role", "system");
-                contextMessage.put("content", "Context: " + context);
-                messages.add(contextMessage);
+            if (isOpenAICompatible()) {
+                return queryOpenAIFormatWithHistory(userMessage, context, conversationHistory);
+            } else {
+                return queryHuggingFaceFormatWithHistory(userMessage, context, conversationHistory);
             }
-
-            // Add conversation history
-            if (conversationHistory != null && !conversationHistory.isEmpty()) {
-                messages.addAll(conversationHistory);
-            }
-
-            // Current user message
-            Map<String, String> userMsg = new HashMap<>();
-            userMsg.put("role", "user");
-            userMsg.put("content", userMessage);
-            messages.add(userMsg);
-
-            request.setMessages(messages);
-
-            // Set headers
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
-
-            HttpEntity<LLMRequest> entity = new HttpEntity<>(request, headers);
-
-            // Make API call
-            ResponseEntity<LLMResponse> response = restTemplate.exchange(
-                    apiUrl,
-                    HttpMethod.POST,
-                    entity,
-                    LLMResponse.class
-            );
-
-            if (response.getBody() != null && 
-                response.getBody().getChoices() != null && 
-                !response.getBody().getChoices().isEmpty()) {
-                
-                String content = response.getBody().getChoices().get(0)
-                        .getMessage().getContent();
-                
-                log.info("LLM response with history received successfully");
-                return content;
-            }
-
-            throw new LLMException("Empty response from LLM");
-
         } catch (Exception e) {
             log.error("Error querying LLM with history: {}", e.getMessage(), e);
-            throw new LLMException("Failed to get response from LLM: " + e.getMessage());
+            throw new LLMException("Failed to get response: " + e.getMessage());
         }
+    }
+
+    private String queryOpenAIFormatWithHistory(String userMessage, String context,
+                                                List<Map<String, String>> conversationHistory) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("model", model);
+
+        List<Map<String, String>> messages = new ArrayList<>();
+
+        Map<String, String> systemMsg = new HashMap<>();
+        systemMsg.put("role", "system");
+        systemMsg.put("content", "You are a helpful AI assistant.");
+        messages.add(systemMsg);
+
+        if (context != null && !context.trim().isEmpty()) {
+            Map<String, String> contextMsg = new HashMap<>();
+            contextMsg.put("role", "system");
+            contextMsg.put("content", "Context: " + context);
+            messages.add(contextMsg);
+        }
+
+        if (conversationHistory != null) {
+            messages.addAll(conversationHistory);
+        }
+
+        Map<String, String> userMsg = new HashMap<>();
+        userMsg.put("role", "user");
+        userMsg.put("content", userMessage);
+        messages.add(userMsg);
+
+        request.put("messages", messages);
+        request.put("max_tokens", maxTokens);
+        request.put("temperature", temperature);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", "Bearer " + apiKey);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                apiUrl,
+                HttpMethod.POST,
+                entity,
+                String.class
+        );
+
+        return parseOpenAIResponse(response.getBody());
+    }
+
+    private String queryHuggingFaceFormatWithHistory(String userMessage, String context,
+                                                     List<Map<String, String>> conversationHistory) {
+        StringBuilder prompt = new StringBuilder();
+
+        if (context != null && !context.trim().isEmpty()) {
+            prompt.append("Context: ").append(context).append("\n\n");
+        }
+
+        prompt.append("Conversation:\n");
+        if (conversationHistory != null) {
+            for (Map<String, String> msg : conversationHistory) {
+                String role = msg.get("role");
+                String content = msg.get("content");
+                prompt.append(role).append(": ").append(content).append("\n");
+            }
+        }
+
+        prompt.append("user: ").append(userMessage).append("\n");
+        prompt.append("assistant:");
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("inputs", prompt.toString());
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("max_new_tokens", maxTokens);
+        parameters.put("temperature", temperature);
+        parameters.put("return_full_text", false);
+        request.put("parameters", parameters);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", "Bearer " + apiKey);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                apiUrl,
+                HttpMethod.POST,
+                entity,
+                String.class
+        );
+
+        return parseHuggingFaceResponse(response.getBody());
     }
 }
